@@ -14,14 +14,20 @@
    :v "[35m"
   })
 
+(def keypeg-colors
+  {
+   :black "[7m"
+   :white "[1m"
+  })
+
 (def all-codes
   (selections (vec (keys colors)) 4))
 
 (defn color-wrap [color s]
-  (str \u001b (get colors color) (str s) (str \u001b "[0m")))
+  (str \u001b color (str s) (str \u001b "[0m")))
 
 (defn colorized-code [code]
-  (apply str (map #(color-wrap % "*") code)))
+  (apply str (map #(color-wrap (% colors) "*") code)))
 
 (defn white-score [code guess]
   (loop [c (frequencies code), g (frequencies guess), score 0]
@@ -38,13 +44,20 @@
   }
 ))
 
+(defn score-characters [score]
+ (apply concat (map (fn [[color count]] (repeat count (color-wrap (color keypeg-colors) "."))) score)))
+
 (defn -main
   []
   (let [secret (rand-nth all-codes)]
-    (println "--|" (colorized-code secret) "|--\n--| ---- |--")
-    (println (score [:r :r :y :y] secret))
-    (apply println (map colorized-code all-codes))
-    ))
+    (println (format "  | %s |  \n--| ---- |--" (colorized-code secret)))
+    (let [guess [:r :r :y :y]]
+      (let [score (score guess secret)]
+        (let [[left right] (partition 2 2 (repeat " ") (score-characters score))]
+        (println (format "%2s| %s |%2s"
+                         (apply str left)
+                         (colorized-code guess)
+                         (apply str right))))))))
 
 (deftest test-score
   (is (= {:black 4, :white 0} (score [ :r :r :y :y ] [ :r :r :y :y ])))
