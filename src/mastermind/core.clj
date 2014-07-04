@@ -47,9 +47,9 @@
 (defn score-characters [score]
  (apply concat (map (fn [[color count]] (repeat count (color-wrap (color keypeg-colors) "."))) score)))
 
-(defn next-guess [last-guess score possible-guesses]
+(defn next-guess [last-guess s possible-guesses]
   (let [ng (rand-nth possible-guesses)]
-    [ng (remove #{ng} possible-guesses)]
+    [ng (filter #(= (score % last-guess) s) possible-guesses)]
     ))
 
 (defn -main
@@ -66,7 +66,9 @@
         (if (< (:black score ) 4)
           (let [[ng pgs] (next-guess guess score possible-guesses)]
             (recur ng, pgs, (inc guess-count)))
-          (println (format "Success! %s guesses." guess-count))))))))
+          (println (format "Success! %s guesses. %s untried possibilities."
+                           guess-count
+                           (count possible-guesses)))))))))
 
 (deftest test-score
   (is (= {:black 4, :white 0} (score [ :r :r :y :y ] [ :r :r :y :y ])))
