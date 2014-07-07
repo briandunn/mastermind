@@ -1,6 +1,5 @@
 (ns mastermind.core
   (:require [clojure.math.combinatorics :refer [selections]]
-            [clojure.set :as set]
             [clojure.test :refer :all]
             ))
 
@@ -51,22 +50,30 @@
   (let [pg (filter #(= (score % last-guess) s) possible-guesses)]
     [(rand-nth pg) pg]))
 
-(defn -main
-  []
+(defn play []
   (let [secret (rand-nth all-codes)]
-    (println (format "  | %s |  \n--| ---- |--" (colorized-code secret)))
+    (comment (format "  | %s |  \n--| ---- |--" (colorized-code secret)))
     (loop [guess [:r :r :y :y], possible-guesses (remove #{guess} all-codes), guess-count 1]
       (let [score (score guess secret)]
         (let [[left right] (partition 2 2 (repeat " ") (score-characters score))]
-        (println (format "%2s| %s |%2s\t\t%-4s"
-                         (apply str left)
-                         (colorized-code guess)
-                         (apply str right)
-                         (count possible-guesses)))
+        (comment (format "%2s| %s |%2s\t\t%-4s"
+                        (apply str left)
+                        (colorized-code guess)
+                        (apply str right)
+                        (count possible-guesses)))
         (if (< (:black score ) 4)
           (let [[ng pgs] (next-guess guess score possible-guesses)]
             (recur ng, pgs, (inc guess-count)))
-          (println (format "Success! %s guesses." guess-count))))))))
+          (do (comment (format "Success! %s guesses." guess-count)) guess-count)))))))
+
+(defn -main
+  []
+  (time (let [games ( map (fn [i] (play)) (range 100))]
+    (println (format "games:\t%d\nworst:\t%d\nbest:\t%d\navg:\t%f"
+                      (count games)
+                      (apply max games)
+                      (apply min games)
+                      (float (#(/ (reduce + games) (count games)))))))))
 
 (deftest test-score
   (is (= {:black 4, :white 0} (score [ :r :r :y :y ] [ :r :r :y :y ])))
