@@ -1,5 +1,6 @@
 (ns mastermind.core
   (:require [clojure.math.combinatorics :refer [selections]]
+            [clojure.set :as set :refer [intersection]]
             [clojure.test :refer :all]
             ))
 
@@ -17,16 +18,9 @@
   (selections (vec (keys colors)) 4))
 
 (defn white-score [code guess]
-  (loop [c (frequencies code)
-         g (frequencies guess)
-         score 0]
-    (if c
-      (let [[color freq] (first c)]
-        (recur
-          (next c)
-          (dissoc g color)
-          (+ score (min freq (or (color g) 0)))))
-      score)))
+  (let [shared (intersection (set code) (set guess))
+        [code* guess*] (map #(frequencies (filter shared %)) [code guess])]
+    (apply + (vals (merge-with min code* guess*)))))
 
 (defn score [guess code]
   (let [black (count (filter true? (map = guess code)))]
