@@ -1,7 +1,8 @@
 (ns mastermind.core
   (:require [clojure.math.combinatorics :refer [selections]]
-            [clojure.set :as set :refer [intersection]]
+            [clojure.set :refer [intersection]]
             [clojure.test :refer :all]
+            [clojure.core.async :refer [chan <! <!! >! >!! go close!] ]
             ))
 
 (def colors
@@ -33,14 +34,33 @@
      :white (max 0 (- (white-score guess code) black))}))
 
 (defn mini-max [guesses]
-  (let [min-ranks (map (fn [guess]
-                         (apply min-key :rank (map (fn [s]
-                                                     {:rank (- (count guesses) (count (filter #(= (score % guess) s) guesses)))
-                                                      :guess guess
-                                                     }) all-scores))) guesses)]
-  (map :guess (val (apply max-key key (group-by :rank min-ranks))))))
+  (let [size (count guesses)
+        c (chan size)]
+    (loop [guess (first guesses)
+           guesses* (next guesses)]
+      (go
+        (>! c (apply min-key :rank (map (fn [s]
+                                          {:rank (- size (count (filter #(= (score % guess) s) guesses)))
+                                           :guess guess
+                                          }) all-scores))))
+      (if guess (recur (first guesses*) (next guesses*))))
+    (let [ranks (map (fn [_]
+                       (<!! (go
+                              (<! c))))
+                     (range size))
+          answer-group (map :guess (val (apply max-key key (group-by :rank ranks))))]
+      (close! c)
+      answer-group)))
 
-(mini-max (take 100 all-codes))
+(comment
+  (time (mini-max all-codes))
+
+(let [times 1296
+      c (chan times)]
+  (map (fn [_] (go (>! c (rand 10)))) (range times))
+  (let [sum (apply + (map (fn [_] (<!! (go (<! c)))) (range times)))]
+    (close! c) sum))
+)
 
 (defn next-guess [last-guess s unplayed-guesses possible-guesses]
   (let [pg (filter #(= (score % last-guess) s) possible-guesses)
