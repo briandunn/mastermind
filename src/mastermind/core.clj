@@ -33,15 +33,6 @@
     {:black black
      :white (max 0 (- (white-score guess code) black))}))
 
-(defn mini-max-sync [guesses]
-  (let [min-ranks (map (fn [guess]
-                         (apply min-key :rank (map (fn [s]
-                                                     {:rank (- (count guesses) (count (filter #(= (score % guess) s) guesses)))
-                                                      :guess guess
-                                                     }) all-scores))) guesses)]
-  (map :guess (val (apply max-key key (group-by :rank min-ranks))))))
-
-
 (defn mini-max [unplayed possible]
   (let [size (count unplayed)
         c (chan size)
