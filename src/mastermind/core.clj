@@ -33,40 +33,46 @@
     {:black black
      :white (max 0 (- (white-score guess code) black))}))
 
-(defn mini-max [guesses]
-  (let [size (count guesses)
-        c (chan size)]
-    (loop [guess (first guesses)
-           guesses* (next guesses)]
-      (go
-        (>! c (apply min-key :rank (map (fn [s]
-                                          {:rank (- size (count (filter #(= (score % guess) s) guesses)))
-                                           :guess guess
-                                          }) all-scores))))
-      (if guess (recur (first guesses*) (next guesses*))))
+(defn mini-max-sync [guesses]
+  (let [min-ranks (map (fn [guess]
+                         (apply min-key :rank (map (fn [s]
+                                                     {:rank (- (count guesses) (count (filter #(= (score % guess) s) guesses)))
+                                                      :guess guess
+                                                     }) all-scores))) guesses)]
+  (map :guess (val (apply max-key key (group-by :rank min-ranks))))))
+
+
+(defn mini-max [unplayed possible]
+  (let [size (count unplayed)
+        c (chan size)
+        rank (fn [guess s]
+               {:rank (count (filter #(= (score % guess) s) possible))
+                :guess guess
+                })]
+    (loop [guesses unplayed]
+      (let [guess (first guesses)]
+        (if guess
+          (do
+            (go
+              (>! c (apply max-key :rank (map (partial rank guess) all-scores))))
+            (recur (next guesses))))))
     (let [ranks (map (fn [_]
                        (<!! (go
                               (<! c))))
                      (range size))
-          answer-group (map :guess (val (apply max-key key (group-by :rank ranks))))]
+          answer-group (map :guess (val (apply min-key key (group-by :rank ranks))))]
       (close! c)
       answer-group)))
 
-(comment
-  (time (mini-max all-codes))
-
-(let [times 1296
-      c (chan times)]
-  (map (fn [_] (go (>! c (rand 10)))) (range times))
-  (let [sum (apply + (map (fn [_] (<!! (go (<! c)))) (range times)))]
-    (close! c) sum))
-)
-
 (defn next-guess [last-guess s unplayed-guesses possible-guesses]
   (let [pg (filter #(= (score % last-guess) s) possible-guesses)
-        mini-max (mini-max possible-guesses)
+        mini-max (mini-max unplayed-guesses pg)
         shared (intersection (set mini-max) (set pg))
-        next-guess (if (empty? shared) (rand-nth mini-max) (first shared))]
+        next-guess (if (= (count pg) 1)
+                     (first pg)
+                     (if (empty? shared)
+                       (first mini-max)
+                       (first shared)))]
     [next-guess pg]))
 
 (defn sink [[topic message]]
@@ -89,23 +95,22 @@
                                 possible)))
       :success (println (format "Success! %s guesses." message)))))
 
-(defn play []
-  (let [secret (rand-nth all-codes)]
-    (sink [:secret secret])
-    (loop [guess [:r :r :y :y]
-           unplayed-guesses (remove #{guess} all-codes)
-           possible-guesses unplayed-guesses
-           guess-count 1]
-      (let [score (score guess secret)]
-        (sink [:row {:guess guess :possible (count possible-guesses) :score score}])
-        (if (< (:black score ) 4)
-          (let [[ng pgs] (next-guess guess score unplayed-guesses possible-guesses)]
-            (recur ng (remove #{guess} unplayed-guesses) pgs (inc guess-count)))
-          (do (sink [:success guess-count]) guess-count))))))
+(defn play [secret]
+  (sink [:secret secret])
+  (loop [guess [:r :r :y :y]
+         unplayed-guesses (remove #{guess} all-codes)
+         possible-guesses unplayed-guesses
+         guess-count 1]
+    (let [score (score guess secret)]
+      (sink [:row {:guess guess :possible (count possible-guesses) :score score}])
+      (if (< (:black score ) 4)
+        (let [[ng pgs] (next-guess guess score unplayed-guesses possible-guesses)]
+          (recur ng (remove #{guess} unplayed-guesses) pgs (inc guess-count)))
+        (do (sink [:success guess-count]) guess-count)))))
 
 (defn -main
   []
-  (time (let [games (map (fn [_] (play)) (range 1))]
+  (time (let [games (map play all-codes)]
     (println (format "games:\t%d\nworst:\t%d\nbest:\t%d\navg:\t%f"
                       (count games)
                       (apply max games)
