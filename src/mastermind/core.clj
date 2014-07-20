@@ -33,13 +33,9 @@
     {:black black
      :white (max 0 (- (white-score guess code) black))}))
 
-(defn mini-max [unplayed possible]
+(defn mini-max [unplayed rank]
   (let [size (count unplayed)
-        c (chan size)
-        rank (fn [guess s]
-               {:rank (count (filter #(= (score % guess) s) possible))
-                :guess guess
-                })]
+        c (chan size)]
     (loop [guesses unplayed]
       (let [guess (first guesses)]
         (if guess
@@ -57,7 +53,9 @@
 
 (defn next-guess [last-guess s unplayed-guesses possible-guesses]
   (let [pg (filter #(= (score % last-guess) s) possible-guesses)
-        mini-max (mini-max unplayed-guesses pg)
+        mini-max (mini-max unplayed-guesses (fn [guess s]
+                                              {:rank (count (filter #(= (score % guess) s) pg))
+                                               :guess guess}))
         shared (intersection (set mini-max) (set pg))
         next-guess (if (= (count pg) 1)
                      (first pg)
